@@ -1,6 +1,9 @@
 // Copyright 2013 The Gorilla WebSocket Authors. All rights reserved.
+// 版权所有 2013 Gorilla WebSocket 作者。保留所有权利。
 // Use of this source code is governed by a BSD-style
+// 本源代码的使用受 BSD 风格许可证约束
 // license that can be found in the LICENSE file.
+// 许可证文件见 LICENSE。
 
 package websocket
 
@@ -90,6 +93,7 @@ var ErrCloseSent = errors.New("websocket: close sent")
 var ErrReadLimit = errors.New("websocket: read limit exceeded")
 
 // netError satisfies the net Error interface.
+// netError 实现了 net Error 接口。
 type netError struct {
 	msg       string
 	temporary bool
@@ -101,11 +105,14 @@ func (e *netError) Temporary() bool { return e.temporary }
 func (e *netError) Timeout() bool   { return e.timeout }
 
 // CloseError represents a close message.
+// CloseError 表示一个关闭消息。
 type CloseError struct {
 	// Code is defined in RFC 6455, section 11.7.
+	// Code 在 RFC 6455 第 11.7 节中定义。
 	Code int
 
 	// Text is the optional text payload.
+	// Text 是可选的文本负载。
 	Text string
 }
 
@@ -147,6 +154,7 @@ func (e *CloseError) Error() string {
 
 // IsCloseError returns boolean indicating whether the error is a *CloseError
 // with one of the specified codes.
+// IsCloseError 返回一个布尔值，表示错误是否为具有指定代码之一的 *CloseError。
 func IsCloseError(err error, codes ...int) bool {
 	if e, ok := err.(*CloseError); ok {
 		for _, code := range codes {
@@ -160,6 +168,7 @@ func IsCloseError(err error, codes ...int) bool {
 
 // IsUnexpectedCloseError returns boolean indicating whether the error is a
 // *CloseError with a code not in the list of expected codes.
+// IsUnexpectedCloseError 返回一个布尔值，表示错误是否为代码不在预期代码列表中的 *CloseError。
 func IsUnexpectedCloseError(err error, expectedCodes ...int) bool {
 	if e, ok := err.(*CloseError); ok {
 		for _, code := range expectedCodes {
@@ -173,84 +182,121 @@ func IsUnexpectedCloseError(err error, expectedCodes ...int) bool {
 }
 
 var (
-	errWriteTimeout        = &netError{msg: "websocket: write timeout", timeout: true, temporary: true}
-	errUnexpectedEOF       = &CloseError{Code: CloseAbnormalClosure, Text: io.ErrUnexpectedEOF.Error()}
-	errBadWriteOpCode      = errors.New("websocket: bad write message type")
-	errWriteClosed         = errors.New("websocket: write closed")
+	// errWriteTimeout 表示写入操作超时的错误
+	errWriteTimeout = &netError{msg: "websocket: write timeout", timeout: true, temporary: true}
+	// errUnexpectedEOF 表示在读取过程中意外遇到EOF的错误
+	errUnexpectedEOF = &CloseError{Code: CloseAbnormalClosure, Text: io.ErrUnexpectedEOF.Error()}
+	// errBadWriteOpCode 表示使用了无效的消息类型进行写入操作
+	errBadWriteOpCode = errors.New("websocket: bad write message type")
+	// errWriteClosed 表示在连接关闭后尝试写入
+	errWriteClosed = errors.New("websocket: write closed")
+	// errInvalidControlFrame 表示控制帧格式无效
 	errInvalidControlFrame = errors.New("websocket: invalid control frame")
 )
 
 // maskRand is an io.Reader for generating mask bytes. The reader is initialized
 // to crypto/rand Reader. Tests swap the reader to a math/rand reader for
 // reproducible results.
+// maskRand 是用于生成掩码字节的 io.Reader。该读取器初始化为 crypto/rand Reader。
+// 测试会将读取器替换为 math/rand 读取器以获得可重现的结果。
 var maskRand = rand.Reader
 
 // newMaskKey returns a new 32 bit value for masking client frames.
+// newMaskKey 返回一个新的32位值，用于掩码客户端帧。
 func newMaskKey() [4]byte {
 	var k [4]byte
-	_, _ = io.ReadFull(maskRand, k[:])
+	_, _ = io.ReadFull(maskRand, k[:]) // 从随机源读取4个字节
 	return k
 }
 
+// 功能解释：
+// WebSocket协议要求客户端发送的所有帧都必须使用掩码进行混淆
+// maskRand 是随机源，用于生成掩码密钥
+// newMaskKey() 生成一个4字节（32位）的随机掩码密钥
+// 为什么要掩码：
+// 安全性：掩码可以防止某些类型的攻击，特别是针对代理和缓存服务器的攻击
+// 协议要求：这是WebSocket协议的强制要求，客户端必须掩码数据，服务器不能掩码
+// 污染防护：可以防止恶意构造的WebSocket帧被中间设备（如代理）错误解释
+// 工作原理：
+// 客户端生成一个随机的4字节掩码密钥
+// 对要发送的每个字节，与掩码密钥的对应位置进行XOR运算
+// 服务器接收时，使用相同的掩码密钥和XOR运算还原数据
+// isControl 检查帧类型是否为控制帧（关闭、Ping或Pong）
 func isControl(frameType int) bool {
 	return frameType == CloseMessage || frameType == PingMessage || frameType == PongMessage
 }
 
+// isData 检查帧类型是否为数据帧（文本或二进制）
 func isData(frameType int) bool {
 	return frameType == TextMessage || frameType == BinaryMessage
 }
 
 var validReceivedCloseCodes = map[int]bool{
 	// see http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
+	// 查看 http://www.iana.org/assignments/websocket/websocket.xhtml#close-code-number
 
-	CloseNormalClosure:           true,
-	CloseGoingAway:               true,
-	CloseProtocolError:           true,
-	CloseUnsupportedData:         true,
-	CloseNoStatusReceived:        false,
-	CloseAbnormalClosure:         false,
-	CloseInvalidFramePayloadData: true,
-	ClosePolicyViolation:         true,
-	CloseMessageTooBig:           true,
-	CloseMandatoryExtension:      true,
-	CloseInternalServerErr:       true,
-	CloseServiceRestart:          true,
-	CloseTryAgainLater:           true,
-	CloseTLSHandshake:            false,
+	CloseNormalClosure:           true,  // 正常关闭
+	CloseGoingAway:               true,  // 客户端离开
+	CloseProtocolError:           true,  // 协议错误
+	CloseUnsupportedData:         true,  // 不支持的数据
+	CloseNoStatusReceived:        false, // 没有接收到状态码
+	CloseAbnormalClosure:         false, // 异常关闭
+	CloseInvalidFramePayloadData: true,  // 无效的帧负载数据
+	ClosePolicyViolation:         true,  // 违反策略
+	CloseMessageTooBig:           true,  // 消息过大
+	CloseMandatoryExtension:      true,  // 缺少必要的扩展
+	CloseInternalServerErr:       true,  // 内部服务器错误
+	CloseServiceRestart:          true,  // 服务重启
+	CloseTryAgainLater:           true,  // 稍后重试
+	CloseTLSHandshake:            false, // TLS握手失败
 }
 
+// isValidReceivedCloseCode 检查关闭代码是否为有效的接收关闭代码
+// 有效的关闭代码包括：预定义的有效代码或3000-4999范围内的自定义代码
 func isValidReceivedCloseCode(code int) bool {
 	return validReceivedCloseCodes[code] || (code >= 3000 && code <= 4999)
 }
 
 // BufferPool represents a pool of buffers. The *sync.Pool type satisfies this
-// interface.  The type of the value stored in a pool is not specified.
+// interface. The type of the value stored in a pool is not specified.
+// BufferPool 表示一个缓冲区池。*sync.Pool 类型满足此接口。
+// 存储在池中的值的类型未指定。
 type BufferPool interface {
 	// Get gets a value from the pool or returns nil if the pool is empty.
+	// Get 从池中获取一个值，如果池为空则返回 nil。
 	Get() interface{}
 	// Put adds a value to the pool.
+	// Put 向池中添加一个值。
 	Put(interface{})
 }
 
 // writePoolData is the type added to the write buffer pool. This wrapper is
 // used to prevent applications from peeking at and depending on the values
 // added to the pool.
+// writePoolData 是添加到写缓冲池的类型。这个包装器用于防止应用程序
+// 窥视和依赖添加到池中的值。
 type writePoolData struct{ buf []byte }
 
 // The Conn type represents a WebSocket connection.
+// Conn 类型表示一个 WebSocket 连接。
 type Conn struct {
 	conn        net.Conn
 	isServer    bool
 	subprotocol string
 
 	// Write fields
-	mu            chan struct{} // used as mutex to protect write to conn
-	writeBuf      []byte        // frame is constructed in this buffer.
+	// 写入字段
+	mu chan struct{} // used as mutex to protect write to conn
+	// 用作互斥锁以保护对 conn 的写入
+	writeBuf []byte // frame is constructed in this buffer.
+	// 帧在此缓冲区中构建。
 	writePool     BufferPool
 	writeBufSize  int
 	writeDeadline time.Time
 	writer        io.WriteCloser // the current writer returned to the application
-	isWriting     bool           // for best-effort concurrent write detection
+	// 返回给应用程序的当前写入器
+	isWriting bool // for best-effort concurrent write detection
+	// 用于尽最大努力检测并发写入
 
 	writeErrMu sync.Mutex
 	writeErr   error
@@ -260,15 +306,22 @@ type Conn struct {
 	newCompressionWriter   func(io.WriteCloser, int) io.WriteCloser
 
 	// Read fields
-	reader  io.ReadCloser // the current reader returned to the application
+	// 读取字段
+	reader io.ReadCloser // the current reader returned to the application
+	// 返回给应用程序的当前读取器
 	readErr error
 	br      *bufio.Reader
 	// bytes remaining in current frame.
+	// 当前帧中剩余的字节数。
 	// set setReadRemaining to safely update this value and prevent overflow
+	// 使用 setReadRemaining 安全地更新此值并防止溢出
 	readRemaining int64
-	readFinal     bool  // true the current message has more frames.
-	readLength    int64 // Message size.
-	readLimit     int64 // Maximum message size.
+	readFinal     bool // true the current message has more frames.
+	// 如果当前消息还有更多帧则为 true。
+	readLength int64 // Message size.
+	// 消息大小。
+	readLimit int64 // Maximum message size.
+	// 最大消息大小。
 	readMaskPos   int
 	readMaskKey   [4]byte
 	handlePong    func(string) error
@@ -276,8 +329,10 @@ type Conn struct {
 	handleClose   func(int, string) error
 	readErrCount  int
 	messageReader *messageReader // the current low-level reader
+	// 当前的低级读取器
 
-	readDecompress         bool // whether last read frame had RSV1 set
+	readDecompress bool // whether last read frame had RSV1 set
+	// 最后读取的帧是否设置了 RSV1
 	newDecompressionReader func(io.Reader) io.ReadCloser
 }
 
@@ -334,27 +389,32 @@ func (c *Conn) setReadRemaining(n int64) error {
 }
 
 // Subprotocol returns the negotiated protocol for the connection.
+// Subprotocol 返回连接协商的协议。
 func (c *Conn) Subprotocol() string {
 	return c.subprotocol
 }
 
 // Close closes the underlying network connection without sending or waiting
 // for a close message.
+// Close 关闭底层网络连接，不发送也不等待关闭消息。
 func (c *Conn) Close() error {
 	return c.conn.Close()
 }
 
 // LocalAddr returns the local network address.
+// LocalAddr 返回本地网络地址。
 func (c *Conn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
 // RemoteAddr returns the remote network address.
+// RemoteAddr 返回远程网络地址。
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
 // Write methods
+// 写入方法
 
 func (c *Conn) writeFatal(err error) error {
 	c.writeErrMu.Lock()
@@ -524,6 +584,15 @@ func (c *Conn) beginMessage(mw *messageWriter, messageType int) error {
 //
 // All message types (TextMessage, BinaryMessage, CloseMessage, PingMessage and
 // PongMessage) are supported.
+//
+// NextWriter 返回用于发送下一条消息的写入器。写入器的 Close 方法
+// 将完整的消息刷新到网络。
+//
+// 一个连接最多只能有一个打开的写入器。如果应用程序尚未关闭之前的写入器，
+// NextWriter 会关闭它。
+//
+// 支持所有消息类型（TextMessage、BinaryMessage、CloseMessage、PingMessage
+// 和 PongMessage）。
 func (c *Conn) NextWriter(messageType int) (io.WriteCloser, error) {
 	var mw messageWriter
 	if err := c.beginMessage(&mw, messageType); err != nil {
@@ -764,6 +833,13 @@ func (c *Conn) WritePreparedMessage(pm *PreparedMessage) error {
 
 // WriteMessage is a helper method for getting a writer using NextWriter,
 // writing the message and closing the writer.
+//
+// If the message is a close message (OpClose, OpPing or OpPong) the payload
+// is not written.
+//
+// WriteMessage 是一个辅助方法，用于使用 NextWriter 获取写入器并写入消息。
+//
+// 如果消息是关闭消息（OpClose、OpPing 或 OpPong），则不写入负载。
 func (c *Conn) WriteMessage(messageType int, data []byte) error {
 
 	if c.isServer && (c.newCompressionWriter == nil || !c.enableWriteCompression) {
@@ -793,12 +869,17 @@ func (c *Conn) WriteMessage(messageType int, data []byte) error {
 // connection. After a write has timed out, the websocket state is corrupt and
 // all future writes will return an error. A zero value for t means writes will
 // not time out.
+//
+// SetWriteDeadline 在底层网络连接上设置写入截止时间。在写入超时后，
+// websocket 状态将损坏，所有未来的写入都将返回错误。t 为零值表示写入
+// 不会超时。
 func (c *Conn) SetWriteDeadline(t time.Time) error {
 	c.writeDeadline = t
 	return nil
 }
 
 // Read methods
+// 读取方法
 
 func (c *Conn) advanceFrame() (int, error) {
 	// 1. Skip remainder of previous frame.
@@ -1002,10 +1083,11 @@ func (c *Conn) handleProtocolError(message string) error {
 // There can be at most one open reader on a connection. NextReader discards
 // the previous message if the application has not already consumed it.
 //
-// Applications must break out of the application's read loop when this method
-// returns a non-nil error value. Errors returned from this method are
-// permanent. Once this method returns a non-nil error, all subsequent calls to
-// this method return the same error.
+// NextReader 返回从对等方接收到的下一个数据消息。返回的 messageType
+// 要么是 TextMessage 要么是 BinaryMessage。
+//
+// 一个连接最多只能有一个打开的读取器。如果应用程序尚未消费之前的消息，
+// NextReader 会丢弃它。
 func (c *Conn) NextReader() (messageType int, r io.Reader, err error) {
 	// Close previous reader, only relevant for decompression.
 	if c.reader != nil {
@@ -1099,6 +1181,9 @@ func (r *messageReader) Close() error {
 
 // ReadMessage is a helper method for getting a reader using NextReader and
 // reading from that reader to a buffer.
+//
+// ReadMessage 是一个辅助方法，用于使用 NextReader 获取读取器并从该读取器
+// 读取到缓冲区。
 func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 	var r io.Reader
 	messageType, r, err = c.NextReader()
@@ -1113,6 +1198,10 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 // After a read has timed out, the websocket connection state is corrupt and
 // all future reads will return an error. A zero value for t means reads will
 // not time out.
+//
+// SetReadDeadline 在底层网络连接上设置读取截止时间。在读取超时后，
+// websocket 连接状态将损坏，所有未来的读取都将返回错误。t 为零值表示读取
+// 不会超时。
 func (c *Conn) SetReadDeadline(t time.Time) error {
 	return c.conn.SetReadDeadline(t)
 }
@@ -1120,6 +1209,9 @@ func (c *Conn) SetReadDeadline(t time.Time) error {
 // SetReadLimit sets the maximum size in bytes for a message read from the peer. If a
 // message exceeds the limit, the connection sends a close message to the peer
 // and returns ErrReadLimit to the application.
+//
+// SetReadLimit 设置从对等方读取的消息的最大字节大小。如果消息超过限制，
+// 连接会向对等方发送关闭消息，并向应用程序返回 ErrReadLimit。
 func (c *Conn) SetReadLimit(limit int64) {
 	c.readLimit = limit
 }
@@ -1143,6 +1235,17 @@ func (c *Conn) CloseHandler() func(code int, text string) error {
 // normal error handling. Applications should only set a close handler when the
 // application must perform some action before sending a close message back to
 // the peer.
+//
+// SetCloseHandler 设置用于处理从对等方接收到的关闭消息的处理程序。
+// 如果关闭消息为空，则 h 的 code 参数为接收到的关闭代码或 CloseNoStatusReceived。
+// 默认的关闭处理程序会向对等方发送回一个关闭消息。
+//
+// 处理程序函数从 NextReader、ReadMessage 和消息读取器的 Read 方法中调用。
+// 应用程序必须读取连接以处理关闭消息，如上面控制消息部分所述。
+//
+// 当收到关闭消息时，连接读取方法返回 CloseError。大多数应用程序应该将关闭
+// 消息作为其正常错误处理的一部分来处理。只有当应用程序必须在向对等方发送
+// 关闭消息之前执行某些操作时，才应设置关闭处理程序。
 func (c *Conn) SetCloseHandler(h func(code int, text string) error) {
 	if h == nil {
 		h = func(code int, text string) error {
@@ -1167,6 +1270,13 @@ func (c *Conn) PingHandler() func(appData string) error {
 // The handler function is called from the NextReader, ReadMessage and message
 // reader Read methods. The application must read the connection to process
 // ping messages as described in the section on Control Messages above.
+//
+// SetPingHandler 设置用于处理从对等方接收到的 ping 消息的处理程序。
+// h 的 appData 参数是 PING 消息的应用程序数据。默认的 ping 处理程序
+// 会向对等方发送一个 pong。
+//
+// 处理程序函数从 NextReader、ReadMessage 和消息读取器的 Read 方法中调用。
+// 应用程序必须读取连接以处理 ping 消息，如上面控制消息部分所述。
 func (c *Conn) SetPingHandler(h func(appData string) error) {
 	if h == nil {
 		h = func(message string) error {
@@ -1190,6 +1300,13 @@ func (c *Conn) PongHandler() func(appData string) error {
 // The handler function is called from the NextReader, ReadMessage and message
 // reader Read methods. The application must read the connection to process
 // pong messages as described in the section on Control Messages above.
+//
+// SetPongHandler 设置用于处理从对等方接收到的 pong 消息的处理程序。
+// h 的 appData 参数是 PONG 消息的应用程序数据。默认的 pong 处理程序
+// 不执行任何操作。
+//
+// 处理程序函数从 NextReader、ReadMessage 和消息读取器的 Read 方法中调用。
+// 应用程序必须读取连接以处理 pong 消息，如上面控制消息部分所述。
 func (c *Conn) SetPongHandler(h func(appData string) error) {
 	if h == nil {
 		h = func(string) error { return nil }
@@ -1214,6 +1331,9 @@ func (c *Conn) UnderlyingConn() net.Conn {
 // EnableWriteCompression enables and disables write compression of
 // subsequent text and binary messages. This function is a noop if
 // compression was not negotiated with the peer.
+//
+// EnableWriteCompression 启用和禁用后续文本和二进制消息的写入压缩。
+// 如果未与对等方协商压缩，则此函数不执行任何操作。
 func (c *Conn) EnableWriteCompression(enable bool) {
 	c.enableWriteCompression = enable
 }
@@ -1222,6 +1342,10 @@ func (c *Conn) EnableWriteCompression(enable bool) {
 // binary messages. This function is a noop if compression was not negotiated
 // with the peer. See the compress/flate package for a description of
 // compression levels.
+//
+// SetCompressionLevel 设置后续文本和二进制消息的 flate 压缩级别。
+// 如果未与对等方协商压缩，则此函数不执行任何操作。有关压缩级别的说明，
+// 请参阅 compress/flate 包。
 func (c *Conn) SetCompressionLevel(level int) error {
 	if !isValidCompressionLevel(level) {
 		return errors.New("websocket: invalid compression level")
@@ -1232,6 +1356,9 @@ func (c *Conn) SetCompressionLevel(level int) error {
 
 // FormatCloseMessage formats closeCode and text as a WebSocket close message.
 // An empty message is returned for code CloseNoStatusReceived.
+//
+// FormatCloseMessage 将 closeCode 和 text 格式化为 WebSocket 关闭消息。
+// 对于 CloseNoStatusReceived 代码，返回空消息。
 func FormatCloseMessage(closeCode int, text string) []byte {
 	if closeCode == CloseNoStatusReceived {
 		// Return empty message because it's illegal to send

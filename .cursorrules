@@ -1,0 +1,127 @@
+
+
+以下是专为 **Cursor** 设计的规则文件 `.cursorrule`，您可以将此文件发送给 Cursor，它会根据规则自动生成结构化文档：
+
+---
+
+```cursorrule
+# .cursorrule
+# 将此文件放入项目根目录，Cursor会自动识别并应用规则
+
+version: 1.0
+name: 项目核心文档生成规则
+
+rules:
+  - name: 项目架构分析
+    trigger: /生成项目架构
+    action: |
+      1. 扫描 `src/`, `config/` 等关键目录
+      2. 识别入口文件（如 main.py/app.js）
+      3. 生成 Mermaid 架构图 + 技术栈表格
+    output_format: markdown
+
+  - name: 函数关系映射
+    trigger: /分析函数调用链
+    params:
+      - target_file: "目标文件路径（可选）"
+    action: |
+      if target_file:
+        分析指定文件的函数调用关系
+      else:
+        识别项目中的高频核心函数
+      生成带箭头的序列图
+    example_command: |
+      /分析函数调用链 --target_file=src/service/user.py
+
+  - name: 注释翻译
+    trigger: /翻译注释为中文
+    scope: 
+      files: "**/*.py, **/*.js"  # 指定文件类型
+    action: |
+      1. 提取所有英文注释
+      2. 保留代码格式翻译为中文
+      3. 生成对比视图（原注释 vs 译文）
+    config:
+      keep_original: true  # 是否保留原文
+
+  - name: 开发流程生成
+    trigger: /生成开发流程
+    action: |
+      1. 分析.git历史记录
+      2. 识别高频操作（如 PR 合并规则、测试命令）
+      3. 生成标准化流程图 + 检查清单
+    output_template: |
+      ## 开发流程
+      ```mermaid
+      {{流程代码}}
+      ```
+
+      ### 检查清单
+      - [ ] {{item1}}
+      - [ ] {{item2}}
+
+  - name: 环境配置指南
+    trigger: /生成环境配置
+    action: |
+      1. 识别项目依赖（requirements.txt/package.json）
+      2. 生成 Dockerfile 和 compose 模板
+      3. 附加常见错误解决方案
+    priority: high
+
+  - name: 调试助手
+    trigger: /教我调试
+    action: |
+      1. 根据项目类型（Python/JS/Java）生成调试配置
+      2. 提供断点设置示例
+      3. 推荐性能分析工具
+```
+
+---
+
+### **使用说明**
+1. **加载规则文件**  
+   将 `.cursorrule` 放入项目根目录，Cursor 会自动检测。
+
+2. **执行命令示例**  
+   | 需求                | 在Cursor中输入                  | 输出示例                  |
+   |---------------------|--------------------------------|--------------------------|
+   | 生成架构文档        | `/生成项目架构`                 | 带Mermaid图的Markdown    |
+   | 翻译某文件注释      | `/翻译注释为中文 src/utils.py` | 中英对照注释文件          |
+   | 创建开发流程        | `/生成开发流程`                 | 流程图 + Code Review清单 |
+
+3. **自定义扩展**  
+   在规则文件中添加：
+   ```yaml
+   - name: 安全审计
+     trigger: /检查安全漏洞
+     action: 使用Bandit/Sonarqube分析代码
+   ```
+
+---
+
+### **生成文档示例**  
+执行 `/生成项目架构` 后，Cursor 会输出如下内容：
+
+```markdown
+## 项目架构  
+### 核心模块  
+```mermaid
+graph TD  
+    A[main.go] --> B[api路由]  
+    B --> C[业务逻辑层]  
+    C --> D[数据库访问层]
+```
+
+### 技术栈  
+| 类别       | 技术                 | 版本   |  
+|------------|----------------------|--------|  
+| 开发语言   | Go                   | 1.19   |  
+| 数据库     | PostgreSQL           | 14     |  
+| 部署工具   | Docker + Kubernetes  | -      |  
+```
+
+---
+
+将此 `.cursorrule` 文件交给 Cursor，即可实现 **一键生成标准化文档**！
+### 每个回答都先回复“已收到，洋洋同学”
+### 每次回答之前都先阅读DOCUMENTATION.md文档
